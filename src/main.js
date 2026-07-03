@@ -130,8 +130,20 @@ function render() {
   app.innerHTML = `<main><section class="hero"><div class="brand"><div class="logo">☉</div><span>Open D&D Library</span></div><h1>Your sheet-powered D&D reference.</h1><p>This app now loads the same public Google Sheet data used by the Open D&D reference site.</p><div class="search-shell"><span class="search-icon">⌕</span><input id="search" value="${escapeHtml(state.query)}" placeholder="Search spells, races, weapons, backgrounds..." aria-label="Search compendium" autocomplete="off" />${state.query ? '<button class="clear" id="clearSearch" aria-label="Clear search">×</button>' : ''}${suggestions().length ? `<div class="suggestions">${suggestions().map((item, index) => `<button data-pick="${index}"><b>${escapeHtml(item.title)}</b><span>${escapeHtml(item.categoryLabel)}${item.subtitle ? ` • ${escapeHtml(item.subtitle)}` : ''}</span></button>`).join('')}</div>` : ''}</div></section>${state.error ? `<div class="notice">${escapeHtml(state.error)}</div>` : ''}<nav class="tabs" aria-label="Compendium categories">${CATEGORIES.map((cat) => `<button data-tab="${cat.key}" class="${state.active === cat.key ? 'active' : ''}"><span>${cat.icon}</span>${cat.label}</button>`).join('')}</nav><section class="workspace"><aside class="list-panel"><div class="panel-head"><h2>${category.label}</h2><span>${state.loading ? 'Loading…' : `${list.length} entries`}</span></div>${(category.filters || []).map((filter) => { const options = filter.options.length > 1 ? filter.options : dynamicOptions(filter.key); return `<div class="filter"><label>${filter.label}</label><select data-filter="${filter.key}">${options.map((option) => `<option ${((state.filters[filter.key] || 'All') === option) ? 'selected' : ''}>${escapeHtml(option)}</option>`).join('')}</select></div>`; }).join('')}<div class="entry-list">${list.map((item, index) => `<button data-entry="${index}" class="${state.selected?.title === item.title && state.selected?.category === item.category ? 'selected' : ''}"><b>${escapeHtml(item.title)}</b>${item.subtitle ? `<span>${escapeHtml(item.subtitle)}</span>` : ''}</button>`).join('')}</div></aside>${detailHtml()}</section></main>`;
   bindEvents(list, suggestions());
 }
+function restoreSearchFocus(cursorPosition = state.query.length) {
+  const search = document.querySelector('#search');
+  if (!search) return;
+  search.focus();
+  search.setSelectionRange(cursorPosition, cursorPosition);
+}
+
 function bindEvents(list, found) {
-  document.querySelector('#search')?.addEventListener('input', (event) => { state.query = event.target.value; render(); document.querySelector('#search')?.focus(); });
+  document.querySelector('#search')?.addEventListener('input', (event) => {
+    const cursorPosition = event.target.selectionStart ?? event.target.value.length;
+    state.query = event.target.value;
+    render();
+    restoreSearchFocus(cursorPosition);
+  });
   document.querySelector('#clearSearch')?.addEventListener('click', () => { state.query = ''; render(); });
   document.querySelectorAll('[data-pick]').forEach((button) => button.addEventListener('mousedown', () => { const item = found[Number(button.dataset.pick)]; state.selected = item; state.active = item.category; state.query = ''; render(); }));
   document.querySelectorAll('[data-tab]').forEach((button) => button.addEventListener('click', () => { state.active = button.dataset.tab; state.selected = categoryItems()[0] || state.selected; render(); }));
