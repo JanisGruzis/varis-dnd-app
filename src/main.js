@@ -41,8 +41,39 @@ function sheetUrl(category) {
   return category.proxied ? `${CORS_PROXY}${encodeURIComponent(url)}` : url;
 }
 
+const ALLOWED_HTML_TAGS = new Set(['A', 'B', 'BR', 'EM', 'I', 'LI', 'OL', 'P', 'STRONG', 'U', 'UL']);
+const ALLOWED_HTML_ATTRIBUTES = { A: new Set(['href', 'title', 'target', 'rel']) };
+
+function hasHtml(value) {
+  return /<\/?[a-z][\s\S]*>/i.test(String(value ?? ''));
+}
+
+function sanitizeHtml(value) {
+  const template = document.createElement('template');
+  template.innerHTML = String(value ?? '');
+  template.content.querySelectorAll('*').forEach((element) => {
+    if (!ALLOWED_HTML_TAGS.has(element.tagName)) {
+      element.replaceWith(...element.childNodes);
+      return;
+    }
+    [...element.attributes].forEach((attribute) => {
+      const allowed = ALLOWED_HTML_ATTRIBUTES[element.tagName]?.has(attribute.name.toLowerCase());
+      if (!allowed) element.removeAttribute(attribute.name);
+    });
+    if (element.tagName === 'A') {
+      const href = element.getAttribute('href') || '';
+      if (!/^(https?:|mailto:|#)/i.test(href)) element.removeAttribute('href');
+      element.setAttribute('rel', 'noopener noreferrer');
+      if (element.getAttribute('target') === '_blank') element.setAttribute('target', '_blank');
+    }
+  });
+  return template.innerHTML;
+}
+
 function notationToHtml(text) {
-  return escapeHtml(text).replaceAll('|', '<br>').replaceAll('[', '<ul><li>').replaceAll(';', '</li><li>').replaceAll(']', '</li></ul>');
+  const value = String(text ?? '');
+  if (hasHtml(value)) return sanitizeHtml(value.replaceAll('|', '<br>'));
+  return escapeHtml(value).replaceAll('|', '<br>').replaceAll('[', '<ul><li>').replaceAll(';', '</li><li>').replaceAll(']', '</li></ul>');
 }
 
 function cleanCommas(value) {
@@ -90,8 +121,8 @@ function detailHtml() {
   const item = state.selected;
   if (!item) return '<div class="empty"><div class="empty-icon">☰</div><h2>Choose an entry</h2><p>Browse sheet-powered spells, backgrounds, playable races, and weapons, or use search to jump straight to an entry.</p></div>';
   const hidden = new Set(['title', 'subtitle', 'body', 'category', 'categoryLabel']);
-  const stats = Object.entries(item).filter(([key, value]) => !hidden.has(key) && value !== null && value !== '' && value !== undefined).map(([key, value]) => `<div class="stat"><b>${escapeHtml(key.replace(/([A-Z])/g, ' $1'))}</b><span>${notationToHtml(value)}</span></div>`).join('');
-  return `<article class="detail-card"><div class="detail-top"><span>${escapeHtml(item.categoryLabel)}</span>${item.subtitle ? `<span>${escapeHtml(item.subtitle)}</span>` : ''}</div><h2>${escapeHtml(item.title)}</h2>${item.body ? `<p class="lead">${notationToHtml(item.body)}</p>` : ''}<div class="stat-grid">${stats}</div></article>`;
+  const stats = Object.entries(item).filter(([key, value]) => !hidden.has(key) && value !== null && value !== '' && value !== undefined).map(([key, value]) => `<div class="stat"><b>${escapeHtml(key.replace(/([A-Z])/g, ' $1'))}</b><div>${notationToHtml(value)}</div></div>`).join('');
+  return `<article class="detail-card"><div class="detail-top"><span>${escapeHtml(item.categoryLabel)}</span>${item.subtitle ? `<span>${escapeHtml(item.subtitle)}</span>` : ''}</div><h2>${escapeHtml(item.title)}</h2>${item.body ? `<div class="lead">${notationToHtml(item.body)}</div>` : ''}<div class="stat-grid">${stats}</div></article>`;
 }
 function render() {
   const category = currentCategory();
